@@ -30,6 +30,17 @@ import { NavComponent } from './shared/components/nav/nav.component';
     .main-content {
       padding: 2rem;
     }
+
+    @media (max-width: 768px) {
+      .layout.with-nav .main-content {
+        margin-left: 0;
+        padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+      }
+
+      .main-content {
+        padding: 1rem;
+      }
+    }
   `]
 })
 export class App {

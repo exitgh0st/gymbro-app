@@ -175,6 +175,42 @@ import { WorkoutLogService, LogExercise } from './workout-log.service';
       cursor: pointer; padding: 0.25rem 0; text-align: left; margin-top: 0.5rem;
       &:hover { text-decoration: underline; }
     }
+
+    @media (max-width: 768px) {
+      .page-header {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+      }
+
+      .header-actions {
+        width: 100%;
+
+        .btn {
+          flex: 1;
+        }
+      }
+
+      .day-tabs {
+        gap: 0.375rem;
+      }
+
+      .day-tab {
+        min-width: 80px;
+        padding: 0.5rem 0.75rem;
+      }
+
+      .exercise-block {
+        padding: 0.75rem;
+      }
+
+      .sets-header {
+        font-size: 0.6875rem;
+      }
+
+      .weight-col { flex: 1; }
+      .reps-col { width: 60px; }
+    }
   `]
 })
 export class WorkoutLogComponent {

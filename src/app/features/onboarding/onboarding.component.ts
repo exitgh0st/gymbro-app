@@ -166,6 +166,17 @@ import { AuthService } from '../../core/auth/auth.service';
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    @media (max-width: 480px) {
+      .onboarding-card {
+        padding: 1.5rem;
+      }
+
+      .form-row {
+        flex-direction: column;
+        gap: 1rem;
+      }
+    }
   `]
 })
 export class OnboardingComponent {

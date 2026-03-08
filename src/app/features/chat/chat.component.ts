@@ -3,12 +3,13 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ChatService, ChatMessage } from './chat.service';
 import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
+import { MarkdownPipe } from '../../shared/pipes/markdown.pipe';
 
 @Component({
   selector: 'app-chat',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, MarkdownPipe],
   template: `
     <div class="chat">
       <div class="chat-header">
@@ -36,7 +37,7 @@ import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
               <div class="message-avatar">GB</div>
             }
             <div class="message-content">
-              <div class="message-bubble">{{ msg.content }}</div>
+              <div class="message-bubble" [innerHTML]="msg.content | markdown"></div>
               @if (msg.saved_plan) {
                 <a class="plan-saved-link" routerLink="/workout-plans">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -72,12 +73,14 @@ import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
 
       <div class="chat-input">
         <textarea
+          #chatInput
           [(ngModel)]="inputText"
           name="message"
           placeholder="Ask your trainer... (Shift+Enter for new line)"
           [disabled]="isTyping()"
           rows="1"
           (keydown)="onKeyDown($event)"
+          (input)="autoResize()"
         ></textarea>
         <button type="button" class="btn btn-primary" [disabled]="!inputText.trim() || isTyping()" (click)="onSend()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -217,8 +220,42 @@ import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
       max-width: 70%;
       line-height: 1.5;
       font-size: 0.9375rem;
-      white-space: pre-wrap;
       word-wrap: break-word;
+
+      ::ng-deep :is(h2, h3, h4) {
+        margin: 0.5rem 0 0.25rem;
+        font-size: 1rem;
+        font-weight: 700;
+
+        &:first-child {
+          margin-top: 0;
+        }
+      }
+
+      ::ng-deep strong {
+        font-weight: 700;
+      }
+
+      ::ng-deep em {
+        font-style: italic;
+      }
+
+      ::ng-deep code {
+        background: rgba(0, 0, 0, 0.06);
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        font-size: 0.8125rem;
+        font-family: 'SF Mono', 'Consolas', monospace;
+      }
+
+      ::ng-deep ul, ::ng-deep ol {
+        margin: 0.375rem 0;
+        padding-left: 1.25rem;
+      }
+
+      ::ng-deep li {
+        margin: 0.125rem 0;
+      }
     }
 
     .typing {
@@ -340,9 +377,9 @@ import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
         background: var(--bg-card);
         outline: none;
         resize: none;
-        min-height: 44px;
+        height: auto;
         max-height: 160px;
-        overflow-y: auto;
+        overflow-y: hidden;
         line-height: 1.5;
         transition: border-color var(--transition);
 
@@ -356,12 +393,46 @@ import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
         min-width: 44px;
       }
     }
+
+    @media (max-width: 768px) {
+      .chat {
+        height: calc(100vh - 2rem - 4.5rem);
+      }
+
+      .chat-header {
+        h1 { font-size: 1.25rem; }
+      }
+
+      .message-bubble {
+        max-width: 85%;
+      }
+
+      .message-content {
+        max-width: 85%;
+      }
+
+      .chat-welcome {
+        padding: 2rem 0.5rem;
+      }
+
+      .starter-prompts {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .plan-delete-confirm {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+    }
   `]
 })
 export class ChatComponent {
   private readonly chatService = inject(ChatService);
   private readonly plansService = inject(WorkoutPlansService);
   private readonly messagesEl = viewChild<ElementRef<HTMLDivElement>>('messagesContainer');
+  private readonly chatInputEl = viewChild<ElementRef<HTMLTextAreaElement>>('chatInput');
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly isTyping = signal(false);
@@ -382,9 +453,27 @@ export class ChatComponent {
     });
   }
 
+  autoResize(): void {
+    const el = this.chatInputEl()?.nativeElement;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.overflowY = 'hidden';
+    const maxHeight = 160;
+    if (el.scrollHeight > maxHeight) {
+      el.style.height = maxHeight + 'px';
+      el.style.overflowY = 'auto';
+    } else {
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }
+
   onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter') {
+      if (event.shiftKey) {
+        return; // allow default newline insertion
+      }
       event.preventDefault();
+      event.stopPropagation();
       this.onSend();
     }
   }
@@ -399,6 +488,8 @@ export class ChatComponent {
     if (!text) return;
 
     this.inputText = '';
+    const inputEl = this.chatInputEl()?.nativeElement;
+    if (inputEl) inputEl.style.height = 'auto';
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),

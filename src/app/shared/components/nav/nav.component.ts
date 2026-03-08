@@ -172,6 +172,62 @@ import { AuthService } from '../../../core/auth/auth.service';
         border-color: var(--danger);
       }
     }
+
+    @media (max-width: 768px) {
+      .nav {
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        top: auto;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        padding: 0;
+        z-index: 100;
+        background: var(--bg-primary);
+      }
+
+      .nav-brand,
+      .nav-footer {
+        display: none;
+      }
+
+      .nav-links {
+        flex-direction: row;
+        flex: 1;
+        gap: 0;
+        padding: 0.25rem 0;
+      }
+
+      .nav-link {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.125rem;
+        padding: 0.5rem 0.25rem;
+        font-size: 0.625rem;
+        border-radius: 0;
+        text-align: center;
+
+        svg {
+          width: 22px;
+          height: 22px;
+        }
+
+        &.active {
+          background: none;
+          color: var(--accent);
+        }
+
+        &:hover {
+          background: none;
+        }
+      }
+    }
   `]
 })
 export class NavComponent {

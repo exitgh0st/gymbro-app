@@ -258,6 +258,63 @@ import { WorkoutPlansService, WorkoutPlan, PlanData, PlanDay, PlanExercise } fro
     }
 
     .add-day-btn { align-self: flex-start; }
+
+    @media (max-width: 768px) {
+      .page-header {
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+      }
+
+      .header-actions {
+        width: 100%;
+
+        .btn {
+          flex: 1;
+        }
+      }
+
+      .exercise-row {
+        flex-wrap: wrap;
+        gap: 0.25rem 0.75rem;
+      }
+
+      .ex-detail, .ex-rest {
+        min-width: auto;
+      }
+
+      .plan-actions {
+        flex-wrap: wrap;
+      }
+
+      .day-editor-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .day-editor-fields {
+        flex-direction: column;
+      }
+
+      .input-day {
+        width: 100%;
+      }
+
+      .exercise-editor-row {
+        flex-wrap: wrap;
+      }
+
+      .input-ex-name {
+        width: 100%;
+        flex: none;
+      }
+
+      .input-sm {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+      }
+    }
   `]
 })
 export class WorkoutPlansComponent {

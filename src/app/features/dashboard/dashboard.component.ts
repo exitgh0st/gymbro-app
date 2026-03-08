@@ -191,6 +191,32 @@ interface UserProfile {
         transform: translateY(-1px);
       }
     }
+
+    @media (max-width: 768px) {
+      .dashboard-welcome {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+
+        .btn {
+          width: 100%;
+        }
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .skeleton-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 400px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   `]
 })
 export class DashboardComponent {
