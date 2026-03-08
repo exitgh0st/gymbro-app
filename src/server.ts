@@ -13,16 +13,33 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 /**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
- *
- * Example:
- * ```ts
- * app.get('/api/{*splat}', (req, res) => {
- *   // Handle API request
- * });
- * ```
+ * Proxy /api requests to the NestJS backend.
+ * In production, configure reverse proxy (nginx) instead.
  */
+app.all('/api/{*splat}', async (req, res) => {
+  const target = process.env['BACKEND_URL'] || 'http://localhost:3000';
+  const url = `${target}${req.originalUrl}`;
+  try {
+    const headers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (typeof value === 'string') headers[key] = value;
+    }
+    delete headers['host'];
+    const response = await fetch(url, {
+      method: req.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
+    });
+    res.status(response.status);
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+    const body = await response.text();
+    res.send(body);
+  } catch {
+    res.status(502).json({ error: 'Backend unavailable' });
+  }
+});
 
 /**
  * Serve static files from /browser
@@ -49,7 +66,6 @@ app.use((req, res, next) => {
 
 /**
  * Start the server if this module is the main entry point.
- * The server listens on the port defined by the `PORT` environment variable, or defaults to 4000.
  */
 if (isMainModule(import.meta.url)) {
   const port = process.env['PORT'] || 4000;
@@ -57,7 +73,6 @@ if (isMainModule(import.meta.url)) {
     if (error) {
       throw error;
     }
-
     console.log(`Node Express server listening on http://localhost:${port}`);
   });
 }
