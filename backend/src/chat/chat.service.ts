@@ -22,8 +22,9 @@ export class ChatService {
   async sendMessage(userId: string, message: string) {
     const profile = await this.getProfile(userId);
     const history = await this.getRecentHistory(userId, 20);
+    const existingPlans = await this.workoutPlansService.getPlans(userId);
 
-    const systemPrompt = this.buildSystemPrompt(profile);
+    const systemPrompt = this.buildSystemPrompt(profile, existingPlans);
 
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
@@ -42,28 +43,44 @@ export class ChatService {
 
     const assistantContent = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.';
 
-    // Detect and save workout plan from AI response
-    let savedPlan: { id: string; title: string } | undefined;
+    // Detect and save/update workout plan from AI response
+    let savedPlan: { id: string; title: string; action: 'created' | 'updated' } | undefined;
     const planData = this.extractWorkoutPlan(assistantContent);
     if (planData) {
       try {
-        const plan = await this.workoutPlansService.createPlan(userId, {
-          title: planData.title,
-          plan_data: planData.plan_data,
-        });
-        savedPlan = { id: plan.id, title: plan.title };
+        if (planData.plan_id) {
+          const plan = await this.workoutPlansService.updatePlan(userId, planData.plan_id, {
+            title: planData.title,
+            plan_data: planData.plan_data,
+          });
+          savedPlan = { id: plan.id, title: plan.title, action: 'updated' };
+        } else {
+          const plan = await this.workoutPlansService.createPlan(userId, {
+            title: planData.title,
+            plan_data: planData.plan_data,
+          });
+          savedPlan = { id: plan.id, title: plan.title, action: 'created' };
+        }
       } catch {}
     }
 
-    // Strip the JSON block from the message shown to the user
-    const cleanMessage = this.stripPlanBlock(assistantContent);
+    // Detect delete plan request (don't delete — frontend will confirm first)
+    let deletePlanRequest: { id: string; title: string } | undefined;
+    const deleteData = this.extractDeletePlan(assistantContent);
+    if (deleteData) {
+      deletePlanRequest = deleteData;
+    }
+
+    // Strip the JSON blocks from the message shown to the user
+    let cleanMessage = this.stripPlanBlock(assistantContent);
+    cleanMessage = this.stripDeleteBlock(cleanMessage);
 
     await this.supabase.client.from('chat_messages').insert([
       { user_id: userId, role: 'user', content: message },
       { user_id: userId, role: 'assistant', content: cleanMessage },
     ]);
 
-    return { message: cleanMessage, saved_plan: savedPlan };
+    return { message: cleanMessage, saved_plan: savedPlan, delete_plan_request: deletePlanRequest };
   }
 
   async getHistory(userId: string) {
@@ -98,15 +115,30 @@ export class ChatService {
     return data;
   }
 
-  private extractWorkoutPlan(content: string): { title: string; plan_data: Record<string, unknown> } | null {
+  private extractWorkoutPlan(content: string): { plan_id?: string; title: string; plan_data: Record<string, unknown> } | null {
     const match = content.match(/```workout-plan\s*([\s\S]*?)```/);
     if (!match) return null;
     try {
       const parsed = JSON.parse(match[1].trim());
       return {
+        plan_id: parsed.plan_id,
         title: parsed.title || 'AI-Generated Plan',
         plan_data: parsed.plan_data || parsed,
       };
+    } catch {
+      return null;
+    }
+  }
+
+  private extractDeletePlan(content: string): { id: string; title: string } | null {
+    const match = content.match(/```delete-plan\s*([\s\S]*?)```/);
+    if (!match) return null;
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (parsed.plan_id) {
+        return { id: parsed.plan_id, title: parsed.title || 'Unknown Plan' };
+      }
+      return null;
     } catch {
       return null;
     }
@@ -116,7 +148,11 @@ export class ChatService {
     return content.replace(/```workout-plan\s*[\s\S]*?```/g, '').trim();
   }
 
-  private buildSystemPrompt(profile: any): string {
+  private stripDeleteBlock(content: string): string {
+    return content.replace(/```delete-plan\s*[\s\S]*?```/g, '').trim();
+  }
+
+  private buildSystemPrompt(profile: any, existingPlans?: any[]): string {
     const today = new Date().toISOString().split('T')[0];
     let prompt = `You are GymBro, a professional personal fitness trainer. You are friendly, motivating, and evidence-based.
 Always give specific, actionable advice. Keep responses concise and motivating.
@@ -140,7 +176,15 @@ IMPORTANT: When the user asks you to create, generate, or suggest a workout plan
   }
 }
 \`\`\`
-Include a friendly text explanation before the JSON block. The plan will be automatically saved for the user.`;
+Include a friendly text explanation before the JSON block. The plan will be automatically saved for the user.
+
+When the user asks to UPDATE, MODIFY, or CHANGE an existing plan, include the plan's ID in the JSON block using the "plan_id" field. Only include "plan_id" when updating an existing plan.
+
+When the user asks to DELETE or REMOVE a plan, include a delete block instead of a workout-plan block:
+\`\`\`delete-plan
+{"plan_id": "the-plan-id", "title": "Plan Name"}
+\`\`\`
+Do NOT include a workout-plan block when deleting. The user will be asked to confirm before deletion.`;
 
     if (profile) {
       prompt += `
@@ -155,6 +199,14 @@ Your client's profile:
 - Activity level: ${profile.activity_level?.replace(/_/g, ' ')}
 
 Tailor all advice to their specific profile and goals.`;
+    }
+
+    if (existingPlans && existingPlans.length > 0) {
+      prompt += `\n\nYour client's existing workout plans:`;
+      for (const plan of existingPlans) {
+        prompt += `\n- "${plan.title}" (ID: ${plan.id})`;
+      }
+      prompt += `\nReference these plans by ID when the user asks to update or delete one.`;
     }
 
     return prompt;

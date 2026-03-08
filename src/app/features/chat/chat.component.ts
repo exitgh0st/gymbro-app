@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, inject, signal, ElementRef, viewChi
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ChatService, ChatMessage } from './chat.service';
+import { WorkoutPlansService } from '../workout-plans/workout-plans.service';
 
 @Component({
   selector: 'app-chat',
@@ -41,8 +42,17 @@ import { ChatService, ChatMessage } from './chat.service';
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                   </svg>
-                  Plan "{{ msg.saved_plan.title }}" saved! View Plans
+                  Plan "{{ msg.saved_plan.title }}" {{ msg.saved_plan.action === 'updated' ? 'updated' : 'created' }}! View Plans
                 </a>
+              }
+              @if (msg.delete_plan_request) {
+                <div class="plan-delete-confirm">
+                  <span>Delete "{{ msg.delete_plan_request.title }}"?</span>
+                  <div class="plan-delete-actions">
+                    <button class="btn-confirm-delete" (click)="confirmDelete(msg)">Delete</button>
+                    <button class="btn-cancel-delete" (click)="cancelDelete(msg)">Cancel</button>
+                  </div>
+                </div>
               }
             </div>
           </div>
@@ -60,22 +70,22 @@ import { ChatService, ChatMessage } from './chat.service';
         }
       </div>
 
-      <form class="chat-input" (ngSubmit)="onSend()">
-        <input
-          type="text"
+      <div class="chat-input">
+        <textarea
           [(ngModel)]="inputText"
           name="message"
-          placeholder="Ask your trainer..."
+          placeholder="Ask your trainer... (Shift+Enter for new line)"
           [disabled]="isTyping()"
-          autocomplete="off"
-        />
-        <button type="submit" class="btn btn-primary" [disabled]="!inputText.trim() || isTyping()">
+          rows="1"
+          (keydown)="onKeyDown($event)"
+        ></textarea>
+        <button type="button" class="btn btn-primary" [disabled]="!inputText.trim() || isTyping()" (click)="onSend()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
         </button>
-      </form>
+      </div>
     </div>
   `,
   styles: [`
@@ -259,20 +269,81 @@ import { ChatService, ChatMessage } from './chat.service';
       }
     }
 
+    .plan-delete-confirm {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #fff0f0;
+      border: 1px solid #ffcccc;
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+
+      span {
+        flex: 1;
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+    }
+
+    .plan-delete-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn-confirm-delete {
+      padding: 0.25rem 0.75rem;
+      background: #e53e3e;
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition);
+
+      &:hover {
+        background: #c53030;
+      }
+    }
+
+    .btn-cancel-delete {
+      padding: 0.25rem 0.75rem;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+
+      &:hover {
+        background: var(--bg-card);
+      }
+    }
+
     .chat-input {
       display: flex;
       gap: 0.75rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border);
+      align-items: flex-end;
 
-      input {
+      textarea {
         flex: 1;
         padding: 0.75rem 1rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
         font-size: 0.9375rem;
+        font-family: inherit;
         background: var(--bg-card);
         outline: none;
+        resize: none;
+        min-height: 44px;
+        max-height: 160px;
+        overflow-y: auto;
+        line-height: 1.5;
         transition: border-color var(--transition);
 
         &:focus {
@@ -289,6 +360,7 @@ import { ChatService, ChatMessage } from './chat.service';
 })
 export class ChatComponent {
   private readonly chatService = inject(ChatService);
+  private readonly plansService = inject(WorkoutPlansService);
   private readonly messagesEl = viewChild<ElementRef<HTMLDivElement>>('messagesContainer');
 
   readonly messages = signal<ChatMessage[]>([]);
@@ -308,6 +380,13 @@ export class ChatComponent {
     afterNextRender(() => {
       this.loadHistory();
     });
+  }
+
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.onSend();
+    }
   }
 
   sendStarterPrompt(prompt: string): void {
@@ -339,6 +418,7 @@ export class ChatComponent {
           content: res.message,
           created_at: new Date().toISOString(),
           saved_plan: res.saved_plan,
+          delete_plan_request: res.delete_plan_request,
         };
         this.messages.update(msgs => [...msgs, assistantMsg]);
         this.isTyping.set(false);
@@ -356,6 +436,43 @@ export class ChatComponent {
         this.scrollToBottom();
       },
     });
+  }
+
+  confirmDelete(msg: ChatMessage): void {
+    const req = msg.delete_plan_request;
+    if (!req) return;
+
+    this.plansService.delete(req.id).subscribe({
+      next: () => {
+        this.messages.update(msgs =>
+          msgs.map(m => m === msg ? { ...m, delete_plan_request: undefined } : m)
+        );
+        const confirmMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Plan "${req.title}" has been deleted.`,
+          created_at: new Date().toISOString(),
+        };
+        this.messages.update(msgs => [...msgs, confirmMsg]);
+        this.scrollToBottom();
+      },
+      error: () => {
+        const errorMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Sorry, I couldn\'t delete the plan. Please try again.',
+          created_at: new Date().toISOString(),
+        };
+        this.messages.update(msgs => [...msgs, errorMsg]);
+        this.scrollToBottom();
+      },
+    });
+  }
+
+  cancelDelete(msg: ChatMessage): void {
+    this.messages.update(msgs =>
+      msgs.map(m => m === msg ? { ...m, delete_plan_request: undefined } : m)
+    );
   }
 
   private loadHistory(): void {

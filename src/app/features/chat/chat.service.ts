@@ -7,12 +7,14 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
-  saved_plan?: { id: string; title: string };
+  saved_plan?: { id: string; title: string; action: 'created' | 'updated' };
+  delete_plan_request?: { id: string; title: string };
 }
 
 export interface ChatResponse {
   message: string;
-  saved_plan?: { id: string; title: string };
+  saved_plan?: { id: string; title: string; action: 'created' | 'updated' };
+  delete_plan_request?: { id: string; title: string };
 }
 
 @Injectable({ providedIn: 'root' })
