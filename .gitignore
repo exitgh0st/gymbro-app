@@ -14,6 +14,9 @@
 # Environment files
 .env
 backend/.env
+
+# MCP config (contains secrets)
+.mcp.json
 npm-debug.log
 yarn-error.log
 
